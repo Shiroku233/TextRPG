@@ -1,56 +1,76 @@
-import random
+from engine.models import Character
+from engine.combat import attack,heavy_attack,make_enemy
+from engine.item import use_item,pick_up
+from engine.world import ROOMS
 
-class Character:
-    def __init__(self, name,hp,attack,defense):
-        self.name = name
-        self.hp = hp
-        self.max_hp = hp
-        self.attack=attack
-        self.defense=defense
-        self.weapon_bonus = 0
-        self.inventory = {"治疗药水": 2}
+def run_battle(player,enemy):
+    print(f"你遇到了 {enemy.name}！")
+    while player.is_alive() and enemy.is_alive():
+        print(f"\n你的 HP: {player.hp}/{player.max_hp}  |  {enemy.name} HP: {enemy.hp}/{enemy.max_hp}")
+        cmd = input("输入 'a' 攻击，'h' 重击，'u' 喝药，'q' 逃跑：").strip().lower()
 
-    def is_alive(self):
-        return self.hp > 0
-
-    def take_damage(self,amount):
-        actual_amount = max(1,amount-self.defense)
-        self.hp=max(0,self.hp-actual_amount)
-        return actual_amount
-
-def roll(n):
-    return random.randint(1, n)
-
-
-def use_item(actor,item):
-    if actor.inventory.get(item,0)<=0:
-        print(f"缺少物品 {item} 。")
-        return False
-    if item=="治疗药水":
-        heal=10
-        actor.hp=min(actor.max_hp,actor.hp+heal)
-        actor.inventory[item]-=1
-        print(f"你喝下治疗药水，恢复 {heal} 点 HP（当前 {actor.hp}/{actor.max_hp}）")
+        if cmd == "q":
+            print("你逃走了。")
+            return False
+        elif cmd == "a":
+            attack(player, enemy)
+            if enemy.is_alive():
+                attack(enemy, player)
+        elif cmd == "h":
+            heavy_attack(player, enemy)
+            if enemy.is_alive():
+                attack(enemy, player)
+        elif cmd == "u":
+            use_item(player, "治疗药水")
+        else:
+            print("无效指令。")
+            continue
+        if enemy.is_alive():
+            attack(enemy, player)
+    if player.is_alive():
+        print(f"\n你击败了 {enemy.name}！")
         return True
-    return False
-
-def make_enemy(config):
-    return Character(config["name"],config["hp"],config["attack"],config["defense"])
-
-def attack(actor,target):
-    is_hit=True if roll(100)>25 else False
-    if is_hit:
-        amount=actor.attack + actor.weapon_bonus + roll(3)
-        actual_amount=target.take_damage(amount)
-        print(f"{actor.name} 对 {target.name} 造成 {actual_amount} 点伤害（{target.name} 剩余 {target.hp} HP）")
     else:
-        print(f"{actor.name}的攻击落空了！")
+        print(f"\n你被 {enemy.name} 击败了……")
+        return False
 
-def heavy_attack(actor,target):
-    is_hit = True if roll(100) > 60 else False
-    if is_hit:
-        amount = actor.attack*2 + actor.weapon_bonus + roll(5)
-        actual_amount = target.take_damage(amount)
-        print(f"{actor.name}使出重击， 对 {target.name} 造成 {actual_amount} 点伤害（{target.name} 剩余 {target.hp} HP）")
-    else:
-        print(f"{actor.name}的攻击落空了！")
+def run_game():
+    player = Character("你", hp=30, attack=8, defense=2)
+    current = "森林入口"
+
+    while player.is_alive():
+        room = ROOMS[current]
+        print(f"\n=== {current} ===")
+        print(room["desc"])
+
+        # 捡地上的东西
+        if room["items"]:
+            print(f"地上有：{', '.join(room['items'])}")
+            cmd = input("'pick' 捡起，或直接回车继续：").strip().lower()
+            if cmd == "pick":
+                item = room["items"].pop(0)
+                pick_up(player, item)
+
+        # 敌人
+        if room["enemy"]:
+            enemy = make_enemy(room["enemy"])
+            survived = run_battle(player, enemy)
+            if not survived:
+                break
+            room["enemy"] = None
+            print(f"{enemy.name} 被击败了。")
+
+        # 移动
+        exits = room["exits"]
+        print(f"出口：{', '.join(exits.keys())}")
+        cmd = input("输入方向移动，'q' 退出：").strip()
+        if cmd == "q":
+            break
+        if cmd in exits:
+            current = exits[cmd]
+        else:
+            print("那个方向走不通。")
+
+
+
+
